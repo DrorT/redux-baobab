@@ -5,29 +5,19 @@ export const REDUX_OPERATION_SIGNATURE = '@@reduxOperations';
 
 
 export const walkState = (locationStack =[], state, initializer) => {
-  // special case for Baobab
-  if (state && state.constructor.name === 'Baobab')
-    return state.get(locationStack);
-  else
-    return locationStack.reduce((reduction, key, currentIdx) => {
-      return reduction && reduction.hasOwnProperty(key) ? reduction[key] :
-          (currentIdx === locationStack.length - 1) ? initializer && initializer(undefined, {type:111}) :
-          {}
-    }, state);
+  return locationStack.reduce((reduction, key, currentIdx) => {
+    return reduction && reduction.hasOwnProperty(key) ? reduction[key] :
+        (currentIdx === locationStack.length - 1) ? initializer && initializer(undefined, {type:111}) :
+        {}
+  }, state);
 };
 
 const appendChangeToState = (locationStack, state, newSubState) => {
-  // special case for Baobab
-  if (state && state.constructor.name === 'Baobab') {
-    state.set(locationStack, newSubState);
-    return state;
+  if (locationStack.length === 1) {
+    return Object.assign({}, state, {[locationStack[0]]: newSubState});
   } else {
-    if (locationStack.length === 1) {
-      return Object.assign({}, state, {[locationStack[0]]: newSubState});
-    } else {
-      const subObject = appendChangeToState(locationStack.slice(1), state[locationStack[0]], newSubState);
-      return Object.assign({}, state, {[locationStack[0]]: subObject});
-    }
+    const subObject = appendChangeToState(locationStack.slice(1), state[locationStack[0]], newSubState);
+    return Object.assign({}, state, {[locationStack[0]]: subObject});
   }
 };
 
@@ -62,19 +52,10 @@ const makeStoreOperations = (storeOperations, state, stack = [], key) => {
         })
       })
     } else {
-      // special case for Baobab
-      if(!state.hasOwnProperty('_data')){
         Object.keys(state).forEach(key => {
           stack.push(key);
           makeStoreOperations(storeOperations, state[key], stack, key);
         })
-      }
-      else {
-        Object.keys(state['_data']).forEach(key => {
-          stack.push(key);
-          makeStoreOperations(storeOperations, state['_data'][key], stack, key);
-        })
-      }
     }
   stack.pop();
 };
@@ -153,7 +134,7 @@ export const reduxOperations = () => {
     }
     const reduxOperationStore = createStore(liftReducer(reducer), enhancer);
     if (reduxOperationStore.reduxOperationStore) {
-      throw new Error('reduxOperation should not be applied more than once. Check your store configuration.');
+      throw new Error('redux operation should not be applied more than once. Check your store configuration.');
     }
     return unliftStore(reduxOperationStore, liftReducer);
   };
