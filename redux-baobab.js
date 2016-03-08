@@ -1,4 +1,4 @@
-import Baobab from 'baobab'
+import Baobab from './baobab-extended'
 const INIT_REDUX = '@@redux/INIT';
 const INIT_DEVTOOLS = '@@INIT';
 
@@ -7,11 +7,10 @@ export let stateTree = null;
 const liftReducerWith = (reducer, initialCommittedState) => {
     stateTree = new Baobab(initialCommittedState||{});
 
-    return (liftedState = stateTree, action) => {
+    return (liftedState, action) => {
+        liftedState = stateTree;
         if (action.type === INIT_REDUX || action.type === INIT_DEVTOOLS) {
             liftedState && liftedState.release();
-            liftedState = new Baobab(initialCommittedState||{});
-
             liftedState.on('update', function(e) {
                 var eventData = e.data;
 
@@ -28,38 +27,28 @@ const liftReducerWith = (reducer, initialCommittedState) => {
         const userState = liftedState && liftedState.get();
         const activeState = reducer(userState, action);
         // only save results if we have a state already
-        if(liftedState) {
-            let stack = [];
-            // these checks make sure the cache is only updated when new data is inserted, changes are handled elsewhere
-            if(activeState !== userState) {
-                Object.keys(activeState).forEach(key => {
-                    stack.push(key);
-                    if (liftedState.get(stack) !== activeState[key]) {
-                        if (typeof activeState[key] === 'object') {
-                            Object.keys(activeState[key]).forEach(key2 => {
-                                stack.push(key2);
-                                if (liftedState.get(stack) !== activeState[key][key2]) {
-                                    console.log('setting - ', stack);
-                                    liftedState.set(stack, activeState[key][key2]);
-                                }
-                                stack.pop();
-                            });
-                        }
-                        else {
-                            console.log('setting - ', stack);
-                            liftedState.set(stack, activeState[key]);
-                        }
+        if(liftedState)
+            deepMerge(userState, activeState, []);
+        return liftedState.get();
+
+        function deepMerge(state, newState, stack){
+            if(state !== newState) {
+                if (typeof newState === 'object' && state !== undefined) {
+                    Object.keys(newState).forEach(key => {
+                        stack.push(key);
+                        deepMerge(state[key], newState[key], stack);
                         stack.pop();
-                    }
-                });
+                    });
+                } else {
+                    liftedState.set(stack, newState);
+                }
             }
         }
-        return liftedState;
     };
 };
 
 const unliftState = (liftedState) => {
-    return liftedState.get();
+    return liftedState;
 };
 
 const unliftStore = (reduxBaobabStore, liftReducer) => {
@@ -89,4 +78,3 @@ export const reduxBaobabEnhancer = () => {
         return unliftStore(reduxBaobabStore, liftReducer);
     };
 };
-

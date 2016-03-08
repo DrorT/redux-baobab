@@ -6,8 +6,8 @@ import {reduxBaobabEnhancer} from './redux-baobab';
 
 
 const enhancer = compose(
-    reduxBaobabEnhancer(),
     reduxOperations(),
+    reduxBaobabEnhancer(),
     DevTools.instrument()
 );
 

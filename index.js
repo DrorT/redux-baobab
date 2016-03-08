@@ -24,13 +24,6 @@ var initialState = {
 
 const store = configureStore(initialState);
 
-let selectDevToolsState = (state = {}) => {
-    if (state && state.constructor.name === 'Baobab')
-        return state.toJson();
-    else
-        return state;
-};
-
 render(
   <Provider store={store}>
     <div>
