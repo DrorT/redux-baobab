@@ -46,16 +46,22 @@ export default class BaobabCache{
     }
 
     set (prop,value){
-        let location = prop.slice(0);
-        let self = this;
         if(typeof value === 'object' && value.hasOwnProperty('$expires') && value.hasOwnProperty('value')) {
-            setTimeout(()=>{
-                self.unset(location);
-                dispatch && dispatch(baobabCashTimeout(location));
-            }, -value['$expires']);
+            this.unsetTimeout(prop, -value['$expires']);
             return baobab.set(prop, value.value);
         }
         return baobab.set(prop, value);
+    }
+
+    unsetTimeout(prop, timeInMilliseconds){
+        debugger
+        let location = prop.slice(0);
+        let self = this;
+        setTimeout(()=>{
+            self.unset(location);
+            dispatch && dispatch(baobabCashTimeout(location));
+            // TODO: MAYBE - move expired data to a different part of the cache, for later use(?)
+        }, timeInMilliseconds);
     }
 
     get (prop){
