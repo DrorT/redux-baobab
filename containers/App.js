@@ -5,6 +5,7 @@ import ClickCounter from '../components/ClickCounter'
 import MultiplyAll from '../components/MultiplyAll'
 import AddDynamicCounters from '../components/AddDynamicCounters'
 import React, { Component, PropTypes } from 'react'
+import ContactForm from '../components/reduxForm'
 
 const topCounter = ['counters', 'top'];
 const bottomCounter = ['counters', 'bottom'];
@@ -42,6 +43,9 @@ export default class Counters extends Component {
           <h3>(Solves #3, #4 from https://github.com/evancz/elm-architecture-tutorial)</h3>
           <AddDynamicCounters/>
         </div>
+          <div>
+              <ContactForm />
+          </div>
       </div>
     )
   }

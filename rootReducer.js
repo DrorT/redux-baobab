@@ -3,10 +3,12 @@ import {counter} from './ducks/counter'
 import {clickCounter} from './ducks/clickCounter'
 import {multiplyAll} from './ducks/multiplyAll'
 import {baobabCacheReducer} from './baobab-duck'
+import {reducer as formReducer} from 'redux-form';
 
 export default combineReducers({
   counter,
   clickCounter,
   multiplyAll,
-  baobabCacheReducer
+  baobabCacheReducer,
+  form: formReducer
 });
