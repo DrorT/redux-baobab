@@ -1,18 +1,42 @@
 import Baobab from 'baobab'
 import {baobabCashTimeout} from './baobab-duck'
+import {getIn} from './helpers'
 
 let baobab = null;
-let defaultInitialData = undefined;
+let defaultInitialData =  {
+    $normalizedData: {
+        users: {
+            1: {
+                firstname: 'John',
+                lastname: 'Silver',
+                friends: [{$type: 'ref', $path: ["users", 3]}]
+            },
+            3: {
+                firstname: 'Jack',
+                lastname: 'Gold',
+                friends: [{$type: 'ref', $path: ["users", 1]}, {$type: 'ref', $path: ["users", 1]}]
+            },
+            5: {
+                firstname: 'Dan',
+                lastname: 'Brown'
+            }
+        }
+    },
+    palette:{
+        colors: ["green","yellow","red"]
+    }
+};
 let defaultOptions = [];
 let instance = null;
 let dispatch = null;
 
 export default class BaobabCache{
     constructor(initialData, options) {
+        debugger
         if(!instance) {
             instance = this;
             if (!baobab) {
-                defaultInitialData = initialData || defaultInitialData;
+                defaultInitialData = initialData && Object.keys(initialData).length ? initialData : defaultInitialData;
                 defaultOptions = options || defaultOptions;
                 baobab = new Baobab(initialData, options);
             }
@@ -27,10 +51,10 @@ export default class BaobabCache{
     }
 
     release(){
-        baobab.commit();
-        Object.keys(baobab.get()).forEach(key=>baobab.unset(key));
+        this.commit();
+        Object.keys(this.get()).forEach(key=>this.unset(key));
         Object.keys(defaultInitialData).forEach(key=>baobab.set(key,defaultInitialData[key]));
-        baobab.commit();
+        this.commit();
     }
 
     on(event, fn){
@@ -45,17 +69,16 @@ export default class BaobabCache{
         return baobab.commit();
     }
 
-    set (prop,value){
+    set (path,value){
         if(typeof value === 'object' && value.hasOwnProperty('$expires') && value.hasOwnProperty('value')) {
-            this.unsetTimeout(prop, -value['$expires']);
-            return baobab.set(prop, value.value);
+            this.unsetTimeout(path, -value['$expires']);
+            return baobab.set(path, value.value);
         }
-        return baobab.set(prop, value);
+        return baobab.set(path, value);
     }
 
-    unsetTimeout(prop, timeInMilliseconds){
-        debugger
-        let location = prop.slice(0);
+    unsetTimeout(path, timeInMilliseconds){
+        let location = path.slice(0);
         let self = this;
         setTimeout(()=>{
             self.unset(location);
@@ -64,18 +87,23 @@ export default class BaobabCache{
         }, timeInMilliseconds);
     }
 
-    get (prop){
-        let res = baobab.get(prop);
+    get (path){
+        let res = baobab.get(path);
         return res;
     }
 
-    unset (prop){
-        baobab.unset(prop);
+    getIn(path){
+        debugger
+        return getIn(this.get(), path);
+    }
+
+    unset (path){
+        baobab.unset(path);
     }
 
     deepMerge(newState){
         let self = this;
-        deepMergeHelper(baobab.get(), newState, []);
+        deepMergeHelper(self.get(), newState, []);
         function deepMergeHelper(state, newState, stack) {
             if (state !== newState) {
                 if (typeof newState === 'object' && state !== undefined && !newState.$type) {
