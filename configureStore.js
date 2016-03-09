@@ -2,7 +2,7 @@ import { createStore, compose } from 'redux'
 import {reduxOperations} from './redux-operations';
 import rootReducer from './rootReducer'
 import DevTools from './DevTools';
-import {reduxBaobabEnhancer} from './redux-baobab';
+import {reduxBaobabEnhancer} from './redux-baobab/redux-baobab';
 
 
 const enhancer = compose(
