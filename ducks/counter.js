@@ -56,7 +56,9 @@ export const counter = (state = 0, action) => {
       resolve: (state = 0, action)=> state + 1
     },
     DECREMENT_COUNTER: {
-      resolve: (state = 0, action)=> state - 1
+      resolve: (state = 0, action)=> {
+        return {$type:'atom', value:state - 1, $expires:-5000}
+      }
     },
     INCREMENT_IF_ODD: {
       resolve: (state = 0, action) => state % 2 ? state + 1 : state

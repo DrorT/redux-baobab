@@ -9,6 +9,7 @@ const enhancer = compose(
     reduxOperations(),
     reduxBaobabEnhancer(),
     DevTools.instrument()
+    //window.devToolsExtension ? window.devToolsExtension() : f => f
 );
 
 //const baobabReducer = baobabReducerWrapper(rootReducer);
