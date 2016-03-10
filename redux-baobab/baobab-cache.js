@@ -2,6 +2,8 @@ import Baobab from 'baobab'
 import {baobabCashTimeout} from './baobab-duck'
 import {getIn} from './helpers'
 
+export const NORMALIZED_PREFIX = "$normalizedData";
+
 let baobab = null;
 let defaultInitialData =  {
     $normalizedData: {
@@ -9,12 +11,12 @@ let defaultInitialData =  {
             1: {
                 firstname: 'John',
                 lastname: 'Silver',
-                friends: [{$type: 'ref', $path: ["users", 3]}]
+                friends: [{$type: 'ref', $path: ["$normalizedData","users", 3]}]
             },
             3: {
                 firstname: 'Jack',
                 lastname: 'Gold',
-                friends: [{$type: 'ref', $path: ["users", 1]}, {$type: 'ref', $path: ["users", 1]}]
+                friends: [{$type: 'ref', $entity: "users", $id:1}, {$type: 'ref', $path: ["$normalizedData","users", 1]}]
             },
             5: {
                 firstname: 'Dan',
@@ -32,7 +34,6 @@ let dispatch = null;
 
 export default class BaobabCache{
     constructor(initialData, options) {
-        debugger
         if(!instance) {
             instance = this;
             if (!baobab) {
@@ -87,14 +88,30 @@ export default class BaobabCache{
         }, timeInMilliseconds);
     }
 
-    get (path){
+    get(path){
         let res = baobab.get(path);
         return res;
     }
 
     getIn(path){
-        debugger
         return getIn(this.get(), path);
+    }
+
+    getFollowingRefs(path, start = this.get()){
+        debugger
+        let res = getIn(start, path);
+        if(res.exists)
+            return res.data;
+        if(typeof res.deepestData === 'object' && res.deepestData['$type']==='ref') {
+            if(res.deepestData['$path'])
+                return this.getFollowingRefs(res.deepestData['$path'].concat(path.slice(res.deepestPath.length)), start);
+            else if (res.deepestData.hasOwnProperty('$id') && res.deepestData.hasOwnProperty('$entity'))
+                return this.getFollowingRefs([NORMALIZED_PREFIX, res.deepestData['$entity'], res.deepestData['$id']].concat(path.slice(res.deepestPath.length)), start);
+            else
+                console.error('no path or entity data provided');
+        } else {
+            return res;
+        }
     }
 
     unset (path){
