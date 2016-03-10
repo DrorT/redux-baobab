@@ -229,7 +229,7 @@ function index(a, fn) {
 
 export function getIn(object, path) {
     if (!path)
-        return NOT_FOUND_OBJECT;
+        return {data: object, solvedPath: [], exists: true};
 
     const solvedPath = [];
 
@@ -277,8 +277,8 @@ export function getIn(object, path) {
             c = c[idx];
         }
         else {
+            solvedPath.push(path[i]);
             exists = typeof c === 'object' && path[i] in c;
-            if (exists) solvedPath.push(path[i]);
             lastC = c;
             c = c[path[i]];
         }
