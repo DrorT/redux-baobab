@@ -88,7 +88,26 @@ export default class BaobabCache{
         }, timeInMilliseconds);
     }
 
+    pathToNormalizedData(obj){
+        if (obj.hasOwnProperty('$id') && obj.hasOwnProperty('$entity'))
+            return [NORMALIZED_PREFIX, obj['$entity'], obj['$id']];
+        else if (obj.hasOwnProperty('$path'))
+            return obj['$path'];
+        else
+            return undefined;
+    }
+
+    // supports an array of strings to get to the path
+    // if only gets a string changes to [path]
+    // if 1st item in the array is an object, or we just got an object - creates an array based on the normalized data path
     get(path){
+        if(path) {
+            if (typeof path == 'object' || typeof path == 'string')
+                path = [path]
+            let normalizedPath = this.pathToNormalizedData(path[0]);
+            if (normalizedPath)
+                path = normalizedPath.concat(path.slice(1));
+        }
         let res = baobab.get(path);
         return res;
     }
@@ -103,10 +122,9 @@ export default class BaobabCache{
         if(res.exists)
             return res.data;
         if(typeof res.deepestData === 'object' && res.deepestData['$type']==='ref') {
-            if(res.deepestData['$path'])
-                return this.getFollowingRefs(res.deepestData['$path'].concat(path.slice(res.deepestPath.length)), start);
-            else if (res.deepestData.hasOwnProperty('$id') && res.deepestData.hasOwnProperty('$entity'))
-                return this.getFollowingRefs([NORMALIZED_PREFIX, res.deepestData['$entity'], res.deepestData['$id']].concat(path.slice(res.deepestPath.length)), start);
+            let normalizedPath = this.pathToNormalizedData(res.deepestData);
+            if(normalizedPath)
+                return this.getFollowingRefs(normalizedPath.concat(path.slice(res.deepestPath.length)), start);
             else
                 console.error('no path or entity data provided');
         } else {
