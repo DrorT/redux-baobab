@@ -14,24 +14,17 @@ import BaobabCache from './redux-baobab/baobab-cache'
 let baobab = new BaobabCache();
 var a = baobab.getIn(["userState"]);
 var b = baobab.getFollowingRefs(["$normalizedData","users","3","friends","0","firstname"], baobab.get());
-var user = baobab.getTree({"$entity":"User", "$id":"1"}, `
-    {
-        id,
-        firstname,
-        friends{
-            id,
-            firstname,
-            lastname,
-            friends{
-                id,
-                lastname
-            }
-        },
-        lastname
-    }
-`);
+let start = new Date().getTime();
+var userEntity = {"$query":"getTop5Users", "$offset":"1", "$limit":"2"};
+var query = `
+                        {
+                            firstname,
+                            lastname
+                        }`;
+const getTree = baobab.getTree(userEntity, query);
+let end = new Date().getTime();
 debugger
-
+console.log("user took " + (end-start) + "ms");
 render(
   <Provider store={store}>
     <div>

@@ -24,11 +24,11 @@ let defaultInitialData =  {
     },
     $results: {
         "getTop5Users":[
-            {$type: 'ref', $entity: "users", $id:1},
-            {$type: 'ref', $entity: "users", $id:1},
-            {$type: 'ref', $entity: "users", $id:1},
-            {$type: 'ref', $entity: "users", $id:1},
-            {$type: 'ref', $entity: "users", $id:1}
+            {$type: 'ref', $entity: "User", $id:1},
+            {$type: 'ref', $entity: "User", $id:2},
+            {$type: 'ref', $entity: "User", $id:3},
+            {$type: 'ref', $entity: "User", $id:4},
+            {$type: 'ref', $entity: "User", $id:5}
         ]
     }
 };
@@ -61,6 +61,23 @@ describe('redux-baobab', ()=> {
                     const getTree = baobab.getTree(userEntity, query);
                     chai.expect(getTree.result).to.deep.equal(expectedResult);
                     chai.expect(getTree.printedMissing).to.equal(expectedMissing);
+                });
+
+                it('should use results hash for queries', ()=> {
+                    var userEntity = {"$query":"getTop5Users", "$offset":"0", "$limit":"1"};
+                    var query = `
+                        {
+                            firstname,
+                            lastname
+                        }`;
+                    const expectedResult = {
+                        firstname: 'John',
+                        lastname: 'Silver'
+                    };
+                    const expectedMissing = '{}';
+                    const getTree = baobab.getTree(userEntity, query);
+                    chai.expect(getTree[0].result).to.deep.equal(expectedResult);
+                    chai.expect(getTree[0].printedMissing).to.equal(expectedMissing);
                 });
 
                 it('should return partial data when only partial is available and a missing object', ()=> {
@@ -233,6 +250,17 @@ describe('redux-baobab', ()=> {
                     const getTree = baobab.getTree(userEntity, query);
                     chai.expect(getTree.result).to.deep.equal(expectedResult);
                     chai.expect(getTree.printedMissing).to.equal(expectedMissing);
+                });
+
+                it('should return an array of same size as limit', ()=> {
+                    var userEntity = {"$query":"getTop5Users", "$offset":"1", "$limit":"2"};
+                    var query = `
+                        {
+                            firstname,
+                            lastname
+                        }`;
+                    const getTree = baobab.getTree(userEntity, query);
+                    chai.expect(getTree.length).to.deep.equal(2);
                 });
             });
         });

@@ -19,13 +19,13 @@ let defaultInitialData =  {
             3: {
                 id:3,
                 firstname: 'Jack',
-                //lastname: 'Black',
+                lastname: 'Black',
                 friends: [{$type: 'ref', $entity: "User", $id:5}, {$type: 'ref', $path: [NORMALIZED_PREFIX,"User", 1]}]
             },
             5: {
                 id:5,
                 firstname: 'Dan',
-                lastname: 'Brown'
+                //lastname: 'Brown'
             }
         },
         palette:{
@@ -34,9 +34,11 @@ let defaultInitialData =  {
     },
     $results: {
         "getTop5Users":[
-            {$type: 'ref', $entity: "users", $id:1},
-            {$type: 'ref', $entity: "users", $id:3},
-            {$type: 'ref', $entity: "users", $id:5}
+            {$type: 'ref', $entity: "User", $id:1},
+            {$type: 'ref', $entity: "User", $id:2},
+            {$type: 'ref', $entity: "User", $id:3},
+            {$type: 'ref', $entity: "User", $id:4},
+            {$type: 'ref', $entity: "User", $id:5}
         ]
     }
 };
@@ -45,12 +47,12 @@ let instance = null;
 let dispatch = null;
 
 export default class BaobabCache{
-    constructor(initialData, options) {;
+    constructor(initialData, options) {
         if (!baobab) {
             defaultInitialData = initialData && Object.keys(initialData).length ? initialData : defaultInitialData;
             defaultOptions = options || defaultOptions;
         if(!instance) {
-            instance = this
+            instance = this;
                 baobab = new Baobab(initialData, options);
             }
             else if(initialData || options)
@@ -183,94 +185,102 @@ export default class BaobabCache{
      *  at 1st stage only inline fragments are allowed and no arguments
      */
     getTree(startPoint, dataAst) {
-        let result = {};
         let stateStartPoint;
 
-        // TODO - figure out how to deal with arrays
         // find starting point or points, if not available return empty result
         if (startPoint.hasOwnProperty('$entity') && startPoint.hasOwnProperty('$id'))
             stateStartPoint = this.get(this.pathToNormalizedData(startPoint));
         else if (startPoint.hasOwnProperty('$query'))
             stateStartPoint = this.get(this.pathToQueryResponses(startPoint));
 
-        //if (Array.isArray(stateStartPoint ) && startPoint.hasOwnProperty('$limit')) {
-        //    const offset = startPoint['$offset'] || 0;
-        //    stateStartPoint = stateStartPoint.slice(offset, startPoint['$limit']);
-        //}
+        if (Array.isArray(stateStartPoint ) && startPoint.hasOwnProperty('$limit')) {
+            const offset = parseInt(startPoint['$offset']) || 0;
+            stateStartPoint = stateStartPoint.slice(offset, offset + parseInt(startPoint['$limit']));
+        }
 
         // create AST from fragments
         dataAst = typeof dataAst === 'string' ? parse(dataAst) : dataAst;
-
-        // visit the AST usign graphql depth 1st
-        let currentLocation = result;
-        let locationStack = [];
-        let locationInState = stateStartPoint;
         const self = this;
 
-        const visitor = {
-            Field: {
-                enter(node, key, parent, path, ancestors) {
-                    locationStack.push(locationInState);
-                    let newLocationInState = self.getFollowingRefs([node.name.value], locationInState);
-                    // if node has selectionSet we are still going lower
-                    if (node.selectionSet) {
-                        if (Array.isArray(newLocationInState)) {
-                            // TODO - get the limit and offset argument and copy only part of the array
-                            currentLocation[node.name.value] = [];
-                            let oldLocation = currentLocation;
-                            let baseLocation = currentLocation[node.name.value];
-                            let ASTarray = newLocationInState.map((location,idx)=>{
-                                baseLocation[idx] = {};
-                                currentLocation = baseLocation[idx];
-                                locationInState = location;
-                                return visit(node.selectionSet, visitor);
-                            });
+        if (Array.isArray(stateStartPoint)) {
+            return stateStartPoint.map((val) => {
+                return getTreeFromStartAndAST(val, dataAst);
+            });
+        } else
+            return getTreeFromStartAndAST(stateStartPoint, dataAst);
 
-                            if (ASTarray.length > 1 )
-                                node.selectionSet = ASTarray.reduce((prev, curr)=>{
-                                    return mergeRecursive(prev, curr);
-                                }, {});
-                            else
-                                node.selectionSet = ASTarray[0];
+        function getTreeFromStartAndAST(stateStartPoint, ast) {
+            // visit the AST using graphql depth 1st
+            let result = {};
+            let currentLocation = result;
+            let locationStack = [];
+            let locationInState = stateStartPoint;
+            let doNothing = false;
 
-                            currentLocation = oldLocation;
-                            // pop is needed here as returning false prevent the visitor to call the leave function
-                            // addressed in issue #315 for graphql-js - https://github.com/graphql/graphql-js/issues/315
-                            locationInState = locationStack.pop();
-                            if (node.selectionSet.selections.length)
+            const visitor = {
+                Field: {
+                    enter(node) {
+                        if(!doNothing) {
+                            let stateValue = self.getFollowingRefs([node.name.value], locationInState);
+                            // if there is no data no reason to go down this tree
+                            if (!stateValue)
                                 return false;
-                            else
+                            // if node has selectionSet we are still going lower
+                            if (!node.selectionSet) {
+                                // this is the final value and should be added
+                                // TODO - if array get the limit and offset argument and copy only part of the array
+                                currentLocation[node.name.value] = stateValue;
+                                // returns null to remove the subtree from the graphql AST showing we have the data already
                                 return null;
-                        } else {
-                            currentLocation[node.name.value] = {};
+                            } else {
+                                locationStack.push(locationInState);
+                                locationInState = stateValue;
+                                let resultAST;
+                                if (Array.isArray(locationInState)) {
+                                    // TODO - get the limit and offset argument and copy only part of the array
+                                    currentLocation[node.name.value] = [];
+                                    let oldLocation = currentLocation;
+                                    let baseLocation = currentLocation[node.name.value];
+                                    let ASTarray = locationInState.map((location, idx)=> {
+                                        baseLocation[idx] = {};
+                                        currentLocation = baseLocation[idx];
+                                        // optimization so references are only checked for once
+                                        locationInState = location;
+                                        return visit(node.selectionSet, visitor);
+                                    });
+                                    currentLocation = oldLocation;
+                                    resultAST = ASTarray.reduce((prev, curr)=> {
+                                        return mergeRecursive(prev, curr);
+                                    }, {});
+                                } else {
+                                    let oldLocation = currentLocation;
+                                    currentLocation[node.name.value] = {};
+                                    currentLocation = currentLocation[node.name.value];
+                                    resultAST = visit(node.selectionSet, visitor);
+                                    currentLocation = oldLocation;
+                                }
+                                locationInState = locationStack.pop();
+                                if (resultAST.selections.length > 0) {
+                                    //let newNode = {...node, selectionSet: resultAST};
+                                    node.newSelectionSet = resultAST;
+                                    doNothing = true;
+                                    return {...node, selectionSet: {...node.newSelectionSet, selections:[]}};
+                                }
+                                else
+                                    return null;
+                            }
                         }
-                    } else {
-                        // this is the final value and should be added
-                        // TODO - if array get the limit and offset argument and copy only part of the array
-                        if(newLocationInState) {
-                            currentLocation[node.name.value] = newLocationInState;
-                            // returns null to remove the subtree from the graphql AST showing we have the data already
-                            node.setToNull = true;
-                            //return null;
+                    },
+                    leave(node, key, parent, path, ancestors){
+                        if(doNothing && node.newSelectionSet!==undefined){
+                            doNothing = false;
+                            return {...node, selectionSet: node.newSelectionSet, newSelectionSet:undefined};
                         }
-                    }
-                    locationInState = newLocationInState;
-                },
-                leave(node) {
-                    locationInState = locationStack.pop();
-                    if(node.setToNull)
-                        return null;
-                    if(node.selectionSet) {
-                        if (node.selectionSet.selections.length)
-                            return node;
-                        else
-                            return null;
                     }
                 }
-            }
-        };
-
-        const missing = visit(dataAst, visitor);
-        return {result, missing, printedMissing: printAST(missing)};
+            };
+            const missing = visit(ast, visitor);
+            return {result, missing, printedMissing: printAST(missing)};
+        }
     }
 }
