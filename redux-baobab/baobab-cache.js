@@ -261,7 +261,10 @@ export default class BaobabCache{
                                 }
                                 locationInState = locationStack.pop();
                                 if (resultAST.selections.length > 0) {
-                                    //let newNode = {...node, selectionSet: resultAST};
+                                    // this is a workaround graphql Visitor not working as expected -
+                                    // if this function return a new node value it will start walking that data (not what I want)
+                                    // if this function returns false or null it will not call the leave fucntion
+                                    // so the below code, minimizes the unnecessary walking of the tree, while still getting leave function called to update the result node value
                                     node.newSelectionSet = resultAST;
                                     doNothing = true;
                                     return {...node, selectionSet: {...node.newSelectionSet, selections:[]}};
