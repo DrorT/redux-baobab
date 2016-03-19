@@ -1,3 +1,4 @@
+import {visit} from 'graphql/language';
 const type = {};
 
 /**
@@ -227,21 +228,21 @@ function index(a, fn) {
  * @return {boolean} result.exists     - Does the path exists in the tree?
  */
 
-export function getIn(object, path) {
+export const getIn = (object, path) =>{
     if (!path)
         return {data: object, solvedPath: [], exists: true};
 
     const solvedPath = [];
 
     let exists = true,
-        lastC,
         c = object,
+        lastC = c,
         idx,
         i,
         l;
 
     for (i = 0, l = path.length; i < l; i++) {
-        if (!c)
+        if (c[path[i]] === undefined){
             return {
                 data: undefined,
                 solvedPath: solvedPath.concat(path.slice(i)),
@@ -249,9 +250,9 @@ export function getIn(object, path) {
                 deepestPath: solvedPath,
                 deepestData: lastC
             };
-
+        }
         // functions act as filter on an array
-        if (typeof path[i] === 'function') {
+        else if (typeof path[i] === 'function') {
             if (!type.array(c))
                 return {data: undefined, solvedPath: null, exists: false, deepestPath: solvedPath, deepestData: lastC};
 
@@ -286,3 +287,41 @@ export function getIn(object, path) {
 
     return {data: c, solvedPath, exists, deepestPath: solvedPath, deepestData: lastC};
 }
+
+export const mergeRecursive = (obj1, obj2) =>{
+    for (var p in obj2) {
+        // Property in destination object set; update its value.
+        if ( obj2[p].constructor==Object ) {
+            obj1[p] = obj1[p]!==undefined ? mergeRecursive(obj1[p], obj2[p]) : obj2[p];
+        } else if (Array.isArray(obj2[p]) && Array.isArray(obj1[p])) {
+            obj2[p].forEach((val, idx) => {
+                obj1[p][idx] = mergeRecursive(obj1[p][idx], val);
+            });
+        } else {
+            obj1[p] = obj2[p];
+        }
+    }
+    return obj1;
+};
+
+export const printAST = (ast) => {
+    let resultJson = '{';
+    const visitor = {
+        Field: {
+            enter(node, key, parent, path, ancestors) {
+                resultJson += node.name.value;
+                if (node.selectionSet)
+                    resultJson += ':{';
+                else
+                    resultJson += ',';
+            },
+            leave(node) {
+                if (node.selectionSet)
+                    resultJson = resultJson.endsWith(',') ?  resultJson.slice(0,-1)+'},' : resultJson+'},';
+            }
+        }
+    };
+    visit(ast, visitor);
+    resultJson = resultJson.endsWith(',') ? resultJson.slice(0,-1)+'}' : resultJson+'}';
+    return resultJson;
+};

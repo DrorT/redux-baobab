@@ -4,25 +4,33 @@ import { Provider } from 'react-redux'
 import Counters from './containers/App'
 import configureStore from './configureStore'
 import DevTools from './DevTools';
+import {tryGraphqlNormalizr} from './graphql-normalizr/graphql-normalzr'
 
-var initialState = {
-    users: {
-        john: {
-            firstname: 'John',
-            lastname: 'Silver'
+const store = configureStore();
+
+//tryGraphqlNormalizr();
+
+import BaobabCache from './redux-baobab/baobab-cache'
+let baobab = new BaobabCache();
+var a = baobab.getIn(["userState"]);
+var b = baobab.getFollowingRefs(["$normalizedData","users","3","friends","0","firstname"], baobab.get());
+var user = baobab.getTree({"$entity":"User", "$id":"1"}, `
+    {
+        id,
+        firstname,
+        friends{
+            id,
+            firstname,
+            lastname,
+            friends{
+                id,
+                lastname
+            }
         },
-        jack: {
-            firstname: 'Jack',
-            lastname: 'Gold'
-        }
-    },
-    palette: {
-        colors: ['yellow', 'purple'],
-        name: 'Glorious colors'
+        lastname
     }
-};
-
-const store = configureStore(initialState);
+`);
+debugger
 
 render(
   <Provider store={store}>

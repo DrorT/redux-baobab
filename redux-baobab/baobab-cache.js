@@ -1,31 +1,43 @@
 import Baobab from 'baobab'
 import {baobabCashTimeout} from './baobab-duck'
-import {getIn} from './helpers'
+import {getIn, printAST, mergeRecursive} from './helpers'
+import {parse, visit} from 'graphql/language';
 
 export const NORMALIZED_PREFIX = "$normalizedData";
+export const RESULTS_PREFIX = "$results";
 
 let baobab = null;
 let defaultInitialData =  {
     $normalizedData: {
-        users: {
+        User: {
             1: {
+                id:1,
                 firstname: 'John',
                 lastname: 'Silver',
-                friends: [{$type: 'ref', $path: ["$normalizedData","users", 3]}]
+                friends: [{$type: 'ref', $path: [NORMALIZED_PREFIX,"User", 3]}]
             },
             3: {
+                id:3,
                 firstname: 'Jack',
-                lastname: 'Gold',
-                friends: [{$type: 'ref', $entity: "users", $id:1}, {$type: 'ref', $path: ["$normalizedData","users", 1]}]
+                //lastname: 'Black',
+                friends: [{$type: 'ref', $entity: "User", $id:5}, {$type: 'ref', $path: [NORMALIZED_PREFIX,"User", 1]}]
             },
             5: {
+                id:5,
                 firstname: 'Dan',
                 lastname: 'Brown'
             }
+        },
+        palette:{
+            colors: ["green","yellow","red"]
         }
     },
-    palette:{
-        colors: ["green","yellow","red"]
+    $results: {
+        "getTop5Users":[
+            {$type: 'ref', $entity: "users", $id:1},
+            {$type: 'ref', $entity: "users", $id:3},
+            {$type: 'ref', $entity: "users", $id:5}
+        ]
     }
 };
 let defaultOptions = [];
@@ -33,12 +45,12 @@ let instance = null;
 let dispatch = null;
 
 export default class BaobabCache{
-    constructor(initialData, options) {
+    constructor(initialData, options) {;
+        if (!baobab) {
+            defaultInitialData = initialData && Object.keys(initialData).length ? initialData : defaultInitialData;
+            defaultOptions = options || defaultOptions;
         if(!instance) {
-            instance = this;
-            if (!baobab) {
-                defaultInitialData = initialData && Object.keys(initialData).length ? initialData : defaultInitialData;
-                defaultOptions = options || defaultOptions;
+            instance = this
                 baobab = new Baobab(initialData, options);
             }
             else if(initialData || options)
@@ -97,12 +109,19 @@ export default class BaobabCache{
             return undefined;
     }
 
+    pathToQueryResponses(obj){
+        if (obj.hasOwnProperty('$query'))
+            return [RESULTS_PREFIX, obj['$query']];
+        else
+            return undefined;
+    }
+
     // supports an array of strings to get to the path
     // if only gets a string changes to [path]
     // if 1st item in the array is an object, or we just got an object - creates an array based on the normalized data path
     get(path){
         if(path) {
-            if (typeof path == 'object' || typeof path == 'string')
+            if (!Array.isArray(path) && typeof path == 'object' || typeof path == 'string')
                 path = [path]
             let normalizedPath = this.pathToNormalizedData(path[0]);
             if (normalizedPath)
@@ -116,20 +135,21 @@ export default class BaobabCache{
         return getIn(this.get(), path);
     }
 
-    getFollowingRefs(path, start = this.get()){
-        debugger
+    getFollowingRefs(path, start, followIfEqual = true){
         let res = getIn(start, path);
         if(res.exists)
             return res.data;
         if(typeof res.deepestData === 'object' && res.deepestData['$type']==='ref') {
-            let normalizedPath = this.pathToNormalizedData(res.deepestData);
-            if(normalizedPath)
-                return this.getFollowingRefs(normalizedPath.concat(path.slice(res.deepestPath.length)), start);
-            else
-                console.error('no path or entity data provided');
+            if(path !== res.data || followIfEqual) {
+                let normalizedPath = this.pathToNormalizedData(res.deepestData);
+                if (normalizedPath)
+                    return this.getFollowingRefs(normalizedPath.concat(path.slice(res.deepestPath.length)), this.get(), false);
+            }
         } else {
-            return res;
+            return undefined;
         }
+        console.error('no path or entity data provided');
+        return undefined;
     }
 
     unset (path){
@@ -152,5 +172,105 @@ export default class BaobabCache{
                 }
             }
         }
+    }
+
+    /**
+     * gets data from the cache starting from the given entity
+     * startPoint is one of
+     *      entity object - with $entity and $id - {$entity:"User", $id:"100"}
+     *      or query object - with $query as name and optional $limit and optional $offset - {$query:"getTop5Users"} or {$query:"getTop5Users", $limit:2, $offset:2}
+     * dataAst can be a graphql like AST built with parser or a string of data needed, both represent what data should be brought from the entity chosen as starting point
+     *  at 1st stage only inline fragments are allowed and no arguments
+     */
+    getTree(startPoint, dataAst) {
+        let result = {};
+        let stateStartPoint;
+
+        // TODO - figure out how to deal with arrays
+        // find starting point or points, if not available return empty result
+        if (startPoint.hasOwnProperty('$entity') && startPoint.hasOwnProperty('$id'))
+            stateStartPoint = this.get(this.pathToNormalizedData(startPoint));
+        else if (startPoint.hasOwnProperty('$query'))
+            stateStartPoint = this.get(this.pathToQueryResponses(startPoint));
+
+        //if (Array.isArray(stateStartPoint ) && startPoint.hasOwnProperty('$limit')) {
+        //    const offset = startPoint['$offset'] || 0;
+        //    stateStartPoint = stateStartPoint.slice(offset, startPoint['$limit']);
+        //}
+
+        // create AST from fragments
+        dataAst = typeof dataAst === 'string' ? parse(dataAst) : dataAst;
+
+        // visit the AST usign graphql depth 1st
+        let currentLocation = result;
+        let locationStack = [];
+        let locationInState = stateStartPoint;
+        const self = this;
+
+        const visitor = {
+            Field: {
+                enter(node, key, parent, path, ancestors) {
+                    locationStack.push(locationInState);
+                    let newLocationInState = self.getFollowingRefs([node.name.value], locationInState);
+                    // if node has selectionSet we are still going lower
+                    if (node.selectionSet) {
+                        if (Array.isArray(newLocationInState)) {
+                            // TODO - get the limit and offset argument and copy only part of the array
+                            currentLocation[node.name.value] = [];
+                            let oldLocation = currentLocation;
+                            let baseLocation = currentLocation[node.name.value];
+                            let ASTarray = newLocationInState.map((location,idx)=>{
+                                baseLocation[idx] = {};
+                                currentLocation = baseLocation[idx];
+                                locationInState = location;
+                                return visit(node.selectionSet, visitor);
+                            });
+
+                            if (ASTarray.length > 1 )
+                                node.selectionSet = ASTarray.reduce((prev, curr)=>{
+                                    return mergeRecursive(prev, curr);
+                                }, {});
+                            else
+                                node.selectionSet = ASTarray[0];
+
+                            currentLocation = oldLocation;
+                            // pop is needed here as returning false prevent the visitor to call the leave function
+                            // addressed in issue #315 for graphql-js - https://github.com/graphql/graphql-js/issues/315
+                            locationInState = locationStack.pop();
+                            if (node.selectionSet.selections.length)
+                                return false;
+                            else
+                                return null;
+                        } else {
+                            currentLocation[node.name.value] = {};
+                        }
+                    } else {
+                        // this is the final value and should be added
+                        // TODO - if array get the limit and offset argument and copy only part of the array
+                        if(newLocationInState) {
+                            currentLocation[node.name.value] = newLocationInState;
+                            // returns null to remove the subtree from the graphql AST showing we have the data already
+                            node.setToNull = true;
+                            //return null;
+                        }
+                    }
+                    locationInState = newLocationInState;
+                },
+                leave(node) {
+                    locationInState = locationStack.pop();
+                    if(node.setToNull)
+                        return null;
+                    if(node.selectionSet) {
+                        if (node.selectionSet.selections.length)
+                            return node;
+                        else
+                            return null;
+                    }
+                }
+            }
+        };
+
+        const missing = visit(dataAst, visitor);
+        return {result, missing, printedMissing: printAST(missing)};
     }
 }

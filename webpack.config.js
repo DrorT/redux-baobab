@@ -46,6 +46,10 @@ module.exports = {
         exclude: /node_modules/,
         query: babelQuery,
         include: __dirname
+      },
+      {
+        test: /\.(png|woff|woff2|eot|ttf|svg|json)$/,
+        loader: 'file-loader'
       }
     ]
   }
