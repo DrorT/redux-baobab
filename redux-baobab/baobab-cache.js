@@ -220,6 +220,7 @@ export default class BaobabCache{
             let locationInState = stateStartPoint;
             let doNothing = false;
             let missingNormalized = {};
+            let dependenciesNormalized ={};
             let entityStack = [];
             let entity = {...startPoint};
 
@@ -231,11 +232,10 @@ export default class BaobabCache{
                             let stateValue = self.getFollowingRefs([node.name.value], locationInState, entity);
                             // if there is no data no reason to go down this tree
                             if (!stateValue) {
-                                if (!missingNormalized[entity["$entity"]])
-                                    missingNormalized[entity["$entity"]] = {};
-                                if(!missingNormalized[entity["$entity"]][entity["$id"]])
-                                    missingNormalized[entity["$entity"]][entity["$id"]] = {};
+                                missingNormalized[entity["$entity"]] = missingNormalized[entity["$entity"]] || {};
+                                missingNormalized[entity["$entity"]][entity["$id"]] = missingNormalized[entity["$entity"]][entity["$id"]] || {};
                                 missingNormalized[entity["$entity"]][entity["$id"]][node.name.value] = node;
+                                entity = entityStack.pop();
                                 return false;
                             }
                             // if node has selectionSet we are still going lower
@@ -243,6 +243,11 @@ export default class BaobabCache{
                                 // this is the final value and should be added
                                 // TODO - if array get the limit and offset argument and copy only part of the array
                                 currentLocation[node.name.value] = stateValue;
+                                // adds the data to be dependant data for result
+                                dependenciesNormalized[entity["$entity"]] = dependenciesNormalized[entity["$entity"]] || {};
+                                dependenciesNormalized[entity["$entity"]][entity["$id"]] = dependenciesNormalized[entity["$entity"]][entity["$id"]] || {};
+                                dependenciesNormalized[entity["$entity"]][entity["$id"]][node.name.value] = node;
+                                entity = entityStack.pop();
                                 // returns null to remove the subtree from the graphql AST showing we have the data already
                                 return null;
                             } else {
@@ -273,6 +278,11 @@ export default class BaobabCache{
                                     currentLocation = oldLocation;
                                 }
                                 locationInState = locationStack.pop();
+                                // adds the data to be dependant data for result
+                                dependenciesNormalized[entity["$entity"]] = dependenciesNormalized[entity["$entity"]] || {};
+                                dependenciesNormalized[entity["$entity"]][entity["$id"]] = dependenciesNormalized[entity["$entity"]][entity["$id"]] || {};
+                                dependenciesNormalized[entity["$entity"]][entity["$id"]][node.name.value] = node;
+                                entity = entityStack.pop();
                                 if (resultAST.selections.length > 0) {
                                     // this is a workaround graphql Visitor not working as expected -
                                     // if this function return a new node value it will start walking that data (not what I want)
@@ -296,7 +306,7 @@ export default class BaobabCache{
                 }
             };
             const missing = visit(ast, visitor);
-            return {result, missing, printedMissing: printAST(missing), missingNormalized};
+            return {result, missing, printedMissing: printAST(missing), missingNormalized, dependenciesNormalized};
         }
     }
 }

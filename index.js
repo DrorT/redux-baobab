@@ -15,16 +15,27 @@ let baobab = new BaobabCache();
 var a = baobab.getIn(["userState"]);
 var b = baobab.getFollowingRefs(["$normalizedData","users","3","friends","0","firstname"], baobab.get());
 let start = new Date().getTime();
-var userEntity = {"$query":"getTop5Users", "$offset":"1", "$limit":"2"};
+var userEntity = {"$entity": "User", "$id": "3"};
 var query = `
                         {
+                            id,
                             firstname,
-                            lastname
+                            friends{
+                                id,
+                                firstname,
+                                lastname,
+                                email,
+                                friends {
+                                    id,
+                                    firstname,
+                                    lastname
+                                }
+                            }
                         }`;
 const getTree = baobab.getTree(userEntity, query);
 let end = new Date().getTime();
-debugger
 console.log("user took " + (end-start) + "ms");
+debugger
 render(
   <Provider store={store}>
     <div>
