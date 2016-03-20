@@ -12,7 +12,7 @@ let defaultInitialData =  {
         User: {
             1: {
                 id:1,
-                firstname: 'John',
+                //firstname: 'John',
                 lastname: 'Silver',
                 friends: [{$type: 'ref', $path: [NORMALIZED_PREFIX,"User", 3]}]
             },
@@ -137,15 +137,18 @@ export default class BaobabCache{
         return getIn(this.get(), path);
     }
 
-    getFollowingRefs(path, start, followIfEqual = true){
+    getFollowingRefs(path, start, entity = undefined, followIfEqual = true){
         let res = getIn(start, path);
         if(res.exists)
             return res.data;
         if(typeof res.deepestData === 'object' && res.deepestData['$type']==='ref') {
             if(path !== res.data || followIfEqual) {
                 let normalizedPath = this.pathToNormalizedData(res.deepestData);
-                if (normalizedPath)
-                    return this.getFollowingRefs(normalizedPath.concat(path.slice(res.deepestPath.length)), this.get(), false);
+                if (normalizedPath){
+                    entity["$entity"] = normalizedPath[1];
+                    entity["$id"] = normalizedPath[2];
+                    return this.getFollowingRefs(normalizedPath.concat(path.slice(res.deepestPath.length)), this.get(), entity, false);
+                }
             }
         } else {
             return undefined;
@@ -216,15 +219,25 @@ export default class BaobabCache{
             let locationStack = [];
             let locationInState = stateStartPoint;
             let doNothing = false;
+            let missingNormalized = {};
+            let entityStack = [];
+            let entity = {...startPoint};
 
             const visitor = {
                 Field: {
                     enter(node) {
                         if(!doNothing) {
-                            let stateValue = self.getFollowingRefs([node.name.value], locationInState);
+                            entityStack.push({...entity});
+                            let stateValue = self.getFollowingRefs([node.name.value], locationInState, entity);
                             // if there is no data no reason to go down this tree
-                            if (!stateValue)
+                            if (!stateValue) {
+                                if (!missingNormalized[entity["$entity"]])
+                                    missingNormalized[entity["$entity"]] = {};
+                                if(!missingNormalized[entity["$entity"]][entity["$id"]])
+                                    missingNormalized[entity["$entity"]][entity["$id"]] = {};
+                                missingNormalized[entity["$entity"]][entity["$id"]][node.name.value] = node;
                                 return false;
+                            }
                             // if node has selectionSet we are still going lower
                             if (!node.selectionSet) {
                                 // this is the final value and should be added
@@ -283,7 +296,7 @@ export default class BaobabCache{
                 }
             };
             const missing = visit(ast, visitor);
-            return {result, missing, printedMissing: printAST(missing)};
+            return {result, missing, printedMissing: printAST(missing), missingNormalized};
         }
     }
 }

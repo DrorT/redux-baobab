@@ -291,11 +291,14 @@ export const getIn = (object, path) =>{
 export const mergeRecursive = (obj1, obj2) =>{
     for (var p in obj2) {
         // Property in destination object set; update its value.
-        if ( obj2[p].constructor==Object ) {
+        if ( obj2[p] && obj2[p].constructor==Object ) {
             obj1[p] = obj1[p]!==undefined ? mergeRecursive(obj1[p], obj2[p]) : obj2[p];
         } else if (Array.isArray(obj2[p]) && Array.isArray(obj1[p])) {
             obj2[p].forEach((val, idx) => {
-                obj1[p][idx] = mergeRecursive(obj1[p][idx], val);
+                if(obj1[p][idx].name.value !== val.name.value)
+                    obj1[p].push(val)
+                else
+                    obj1[p][idx] = mergeRecursive(obj1[p][idx], val);
             });
         } else {
             obj1[p] = obj2[p];
@@ -310,6 +313,8 @@ export const printAST = (ast) => {
         Field: {
             enter(node, key, parent, path, ancestors) {
                 resultJson += node.name.value;
+                if(node.arguments.length > 0)
+                    resultJson += "("+ node.arguments.map((arg)=>arg.name.value+":"+arg.value.value).join(',')+")";
                 if (node.selectionSet)
                     resultJson += ':{';
                 else

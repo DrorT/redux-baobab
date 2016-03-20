@@ -19,7 +19,21 @@ let defaultInitialData =  {
             5: {
                 id:5,
                 firstname: 'Dan'
+            },
+            6: {
+                id: 6,
+                firstname: 'Jules'
+            },
+            7: {
+                id: 7,
+                lastname: 'Verne'
+            },
+            8:{
+                id:8,
+                firstname: 'Jane',
+                friends: [{$type: 'ref', $entity: "User", $id:6}, {$type: 'ref', $path: ["$normalizedData","User", 7]}]
             }
+
         },
     },
     $results: {
@@ -207,8 +221,8 @@ describe('redux-baobab', ()=> {
                     chai.expect(getTree.printedMissing).to.equal(expectedMissing);
                 });
 
-                it('when data is available on lower level but missing on higher level will return a missing AST only asking for the higher level', ()=> {
-                    var userEntity = {"$entity": "User", "$id": "1"};
+                it('should follow references and when data is missing return a full missing tree', ()=> {
+                    var userEntity = {"$entity": "User", "$id": "8"};
                     var query = `
                         {
                             id,
@@ -217,36 +231,24 @@ describe('redux-baobab', ()=> {
                                 id,
                                 firstname,
                                 lastname,
-                                email,
-                                friends{
-                                    id,
-                                    lastname
-                                }
                             },
                             lastname
                         }`;
                     const expectedResult = {
-                        id:1,
-                        firstname: 'John',
+                        id:8,
+                        firstname: 'Jane',
                         friends: [
                             {
-                                id: 3,
-                                firstname: 'Jack',
-                                lastname: 'Black',
-                                friends: [
-                                    {
-                                        id:5
-                                    },
-                                    {
-                                        id:1,
-                                        lastname:'Silver'
-                                    }
-                                ]
+                                id: 6,
+                                firstname: 'Jules'
+                            },
+                            {
+                                id: 7,
+                                lastname: 'Verne'
                             }
-                        ],
-                        lastname: 'Silver'
+                        ]
                     };
-                    const expectedMissing = '{friends:{email,friends:{lastname}}}';
+                    const expectedMissing = '{friends:{lastname,firstname},lastname}';
                     const getTree = baobab.getTree(userEntity, query);
                     chai.expect(getTree.result).to.deep.equal(expectedResult);
                     chai.expect(getTree.printedMissing).to.equal(expectedMissing);
